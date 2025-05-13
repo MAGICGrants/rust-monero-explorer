@@ -1,0 +1,13 @@
+[package]
+name = "rust-monero-explorer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cuprate-blockchain = { path = "./cuprate/storage/blockchain", features = ["serde"] }
+cuprate-database = { path = "./cuprate/storage/database", features = ["serde"] }
+cuprate-types = { path = "./cuprate/types/types", features = ["serde"] }
+hex = "0.4.3"
+actix-web = "4.10.2"
+serde = { version = "1.0.219", features = ["derive"] }
+whoami = "1.6.0"

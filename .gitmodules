@@ -1,0 +1,4 @@
+[submodule "cuprate"]
+	path = cuprate
+	url = https://github.com/Cuprate/cuprate.git
+
