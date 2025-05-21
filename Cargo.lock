@@ -1841,6 +1841,7 @@ dependencies = [
  "cuprate-database",
  "cuprate-types",
  "hex",
+ "monero-serai",
  "serde",
  "whoami",
 ]
