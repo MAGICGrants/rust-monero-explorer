@@ -39,7 +39,7 @@ struct TransactionResponse {
     pub extra: String,
 }
 
-#[get("/api/tx/{tx_hash}")]
+#[get("/api/transaction/{tx_hash}")]
 async fn get_tx(
     env: web::Data<ConcreteEnv>,
     tx_hash: web::Path<String>
@@ -266,7 +266,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_tx)
             .service(get_block)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("127.0.0.1", 8081))?
     .run()
     .await
 }
