@@ -1,4 +1,3 @@
-[submodule "cuprate"]
-	path = cuprate
-	url = https://github.com/Cuprate/cuprate.git
-
+[submodule "external/cuprate"]
+	path = external/cuprate
+	url = https://github.com/MAGICGrants/cuprate-for-explorer.git

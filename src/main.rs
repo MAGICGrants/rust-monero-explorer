@@ -1,3 +1,5 @@
+use core::fmt;
+
 use cuprate_blockchain::{config::ConfigBuilder, ops, tables::{OpenTables, Tables}, types::PreRctOutputId} ;
 use cuprate_database::{ConcreteEnv, DatabaseRo, Env, EnvInner};
 use cuprate_types::json::tx::Transaction;
@@ -270,7 +272,7 @@ async fn get_block(
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let user = whoami::username();
-    let cuprate_dir = "/run/media/artur/Misc/.cuprate";
+    let cuprate_dir = format!("/home/{}/.local/share/cuprate", user);
     
     let config = ConfigBuilder::new()
         .data_directory(cuprate_dir.into())
