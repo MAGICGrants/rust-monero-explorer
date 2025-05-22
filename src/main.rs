@@ -3,7 +3,9 @@ use cuprate_database::{ConcreteEnv, DatabaseRo, Env, EnvInner};
 use cuprate_types::json::tx::Transaction;
 use hex::FromHex;
 use actix_web::{get, web::{self}, App, HttpServer, Responder};
+use monero_serai;
 use serde::Serialize;
+use rayon::prelude::*;
 
 #[derive(Serialize)]
 struct TransactionInput {
@@ -15,8 +17,8 @@ struct TransactionInput {
 #[derive(Serialize)]
 struct TransactionInputMixin {
     pub height: u32,
-    pub tx_hash: String,
     pub public_key: String,
+    pub tx_hash: String,
 }
 
 #[derive(Serialize)]
@@ -50,12 +52,12 @@ async fn get_tx(
     let env_inner = env.env_inner();
     let tx_ro = env_inner.tx_ro().unwrap();
     let tables = env_inner.open_tables(&tx_ro).unwrap();
-    
+
     let tx_id = tables.tx_ids().get(&tx_hash_buff).unwrap();
     let tx_height = tables.tx_heights().get(&tx_id).unwrap();
     let tx_block = tables.block_infos().get(&tx_height).unwrap();
     let tx = ops::tx::get_tx_from_id(&tx_id, tables.tx_blobs()).unwrap();
-    
+
     let response: TransactionResponse = match tx.clone().into() {
         Transaction::V1 { prefix } => {
             let mut inputs: Vec<TransactionInput> = Vec::with_capacity(prefix.vin.len());
@@ -122,31 +124,47 @@ async fn get_tx(
             }
         },
         Transaction::V2 { prefix, rct_signatures: _, rctsig_prunable: _ } => {
-            let mut inputs: Vec<TransactionInput> = Vec::with_capacity(prefix.vin.len());
+            let inputs = prefix.vin
+                .par_iter()
+                .map(|input| {
+                    let mixins: Vec<TransactionInputMixin> = input
+                        .key
+                        .key_offsets
+                        .clone()
+                        .par_iter()
+                        .enumerate()
+                        .map(|(key_offset_i, key_offset)| {
+                            let new_tx_ro = env_inner.tx_ro().unwrap();
+                            let new_tables = env_inner.open_tables(&new_tx_ro).unwrap();
+                            
+                            let mut key_offset_sum: u64 = input.key.key_offsets[0..key_offset_i].iter().copied().sum();
+                            key_offset_sum += key_offset;
+                            let rct_output = new_tables.rct_outputs().get(&key_offset_sum).unwrap();
+                            // let mixin_tx_blob = new_tables.tx_blobs().get(&rct_output.tx_idx).unwrap();
+                            let mixin_tx_block = new_tables.block_infos().get(&(rct_output.height as usize)).unwrap();
+                            let mixin_tx_hash: [u8; 32] = if rct_output.tx_idx == mixin_tx_block.mining_tx_index {
+                                let tx_blob = new_tables.tx_blobs().get(&rct_output.tx_idx).unwrap();
+                                monero_serai::transaction::Transaction::read(&mut tx_blob.0.as_slice()).unwrap().hash()
+                            } else {
+                                let block_tx_index = (rct_output.tx_idx - mixin_tx_block.mining_tx_index - 1) as usize;
+                                new_tables.block_txs_hashes().get(&(rct_output.height as usize)).unwrap()[block_tx_index]
+                            };
 
-            for input in &prefix.vin {
-                let mut mixins: Vec<TransactionInputMixin> = Vec::with_capacity(
-                    input.key.key_offsets.len()
-                );
-
-                for key_offset in &input.key.key_offsets {
-                    let output = tables.rct_outputs().get(key_offset).unwrap();
-                    let mixin_tx_blob = tables.tx_blobs().get(&output.tx_idx).unwrap();
-                    let mixin_tx_hash = monero_serai::transaction::Transaction::read(&mut mixin_tx_blob.0.as_slice()).unwrap().hash();
-
-                    mixins.push(TransactionInputMixin {
-                        height: output.height,
-                        public_key: hex::encode(output.key),
-                        tx_hash: hex::encode(mixin_tx_hash),
-                    });
-                }
+                            TransactionInputMixin {
+                                height: rct_output.height,
+                                public_key: hex::encode(rct_output.key),
+                                tx_hash: hex::encode(mixin_tx_hash),
+                            }
+                        })
+                        .collect();
                 
-                inputs.push(TransactionInput {
-                    amount: input.key.amount,
-                    key_image: hex::encode(*input.key.k_image),
-                    mixins: mixins
-                });
-            }
+                    TransactionInput {
+                        amount: input.key.amount,
+                        key_image: hex::encode(*input.key.k_image),
+                        mixins,
+                    }
+                })
+                .collect();
 
             let mut outputs: Vec<TransactionOutput> = Vec::with_capacity(prefix.vout.len());
 
@@ -217,7 +235,8 @@ async fn get_block(
 
     let height = height.parse::<usize>().ok().unwrap();
     let block_info = ops::block::get_block_info(&height, tables.block_infos()).unwrap();
-    let block_tx_hashes = tables.block_txs_hashes().get(&height).unwrap();  
+    let block_tx_hashes = tables.block_txs_hashes().get(&height).unwrap(); 
+    
     let mut transactions: Vec<BlockTransactionResponse> = Vec::with_capacity(block_tx_hashes.len());
     
     for tx_hash in block_tx_hashes.iter() {
@@ -251,7 +270,7 @@ async fn get_block(
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let user = whoami::username();
-    let cuprate_dir = format!("/home/{}/.local/share/cuprate", user);
+    let cuprate_dir = "/run/media/artur/Misc/.cuprate";
     
     let config = ConfigBuilder::new()
         .data_directory(cuprate_dir.into())
