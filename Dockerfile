@@ -12,7 +12,7 @@ RUN cargo build --release
 FROM alpine:3
 
 COPY --from=builder /build/target/release/rust-monero-explorer-api /usr/local/bin
-RUN addgroup -S cuprate && adduser -S cuprate -G cuprate
+RUN addgroup -g 1000 -S cuprate && adduser -u 1000 -S cuprate -G cuprate
 USER cuprate
 
 EXPOSE 8081
