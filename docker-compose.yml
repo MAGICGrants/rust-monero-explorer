@@ -1,0 +1,23 @@
+services:
+  rust-monero-explorer-api:
+    image: ghcr.io/magicgrants/rust-monero-explorer-api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/block/1"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - cuprate-data:/home/cuprate/.local/share/cuprate
+    ports:
+      - 8081:8081
+
+  cuprated:
+    image: ghcr.io/magicgrants/cuprate
+    restart: unless-stopped
+    volumes:
+      - cuprate-data:/home/cuprate/.local/share/cuprate
+
+volumes:
+  cuprate-data:

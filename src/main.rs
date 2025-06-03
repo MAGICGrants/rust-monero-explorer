@@ -51,19 +51,22 @@ impl error::ResponseError for AppError {
 }
 
 impl From<FromHexError> for AppError {
-    fn from(_: FromHexError) -> Self {
+    fn from(error: FromHexError) -> Self {
+        println!("{:?}", error);
         AppError::InternalServerError
     }
 }
 
 impl From<RuntimeError> for AppError {
-    fn from(_: RuntimeError) -> Self {
+    fn from(error: RuntimeError) -> Self {
+        println!("{:?}", error);
         AppError::InternalServerError
     }
 }
 
 impl From<std::io::Error> for AppError {
-    fn from(_: std::io::Error) -> Self {
+    fn from(error: std::io::Error) -> Self {
+        println!("{:?}", error);
         AppError::InternalServerError
     }
 }
@@ -374,7 +377,7 @@ async fn main() -> std::io::Result<()> {
     let mut data_file_path = final_cuprate_dir.clone();
     data_file_path.push("blockchain");
     data_file_path.push("data.mdb");
-    
+
     if !final_cuprate_dir.exists() || !data_file_path.exists() {
         println!("Could not find Cuprate directory at {:?}", final_cuprate_dir);
         exit(1);
