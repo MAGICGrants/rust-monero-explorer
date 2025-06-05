@@ -1948,6 +1948,7 @@ dependencies = [
  "clap",
  "cuprate-blockchain",
  "cuprate-database",
+ "cuprate-helper",
  "cuprate-types",
  "derive_more",
  "hex",

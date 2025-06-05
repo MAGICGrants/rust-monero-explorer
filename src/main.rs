@@ -1,5 +1,6 @@
 use cuprate_blockchain::{config::ConfigBuilder, ops, tables::{OpenTables, Tables}, types::PreRctOutputId} ;
 use cuprate_database::{ConcreteEnv, DatabaseRo, Env, EnvInner, RuntimeError};
+use cuprate_helper::tx::tx_fee;
 use cuprate_types::json::tx::Transaction;
 use hex::{FromHex, FromHexError};
 use actix_web::{error, get, http::StatusCode, web::{self}, App, HttpResponse, HttpServer, Responder};
@@ -101,6 +102,7 @@ struct TransactionResponse {
     pub confirmation_height: usize,
     pub timestamp: u64,
     pub weight: usize,
+    pub fee: u64,
     pub inputs: Vec<TransactionInput>,
     pub outputs: Vec<TransactionOutput>,
     pub extra: String,
@@ -152,6 +154,7 @@ async fn get_tx(
                             }
                         )?;
 
+
                         let mixin_tx_block = new_tables.block_infos().get(&(output.height as usize))?;
                         let mixin_tx_hash: [u8; 32] = if output.tx_idx == mixin_tx_block.mining_tx_index {
                             let tx_blob = new_tables.tx_blobs().get(&output.tx_idx)?;
@@ -195,6 +198,8 @@ async fn get_tx(
                 })
             }
 
+            let fee = tx_fee(&tx);
+
             TransactionResponse {
                 hash: tx_hash.clone(),
                 version: prefix.version,
@@ -203,6 +208,7 @@ async fn get_tx(
                 confirmation_height: tx_height,
                 timestamp: tx_block.timestamp,
                 weight: tx.weight(),
+                fee,
                 extra: hex::encode(prefix.extra),
                 outputs,
                 inputs: inputs?,
@@ -268,6 +274,8 @@ async fn get_tx(
                 })
             }
 
+            let fee = tx_fee(&tx);
+
             TransactionResponse {
                 hash: tx_hash.clone(),
                 version: prefix.version,
@@ -276,6 +284,7 @@ async fn get_tx(
                 confirmation_height: tx_height,
                 timestamp: tx_block.timestamp,
                 weight: tx.weight(),
+                fee,
                 extra: hex::encode(prefix.extra),
                 outputs,
                 inputs: inputs?,
