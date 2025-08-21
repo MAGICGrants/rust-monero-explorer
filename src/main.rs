@@ -1,6 +1,6 @@
 use cuprate_blockchain::{config::ConfigBuilder, ops, tables::{OpenTables, Tables}, types::PreRctOutputId} ;
 use cuprate_database::{ConcreteEnv, DatabaseRo, Env, EnvInner, RuntimeError};
-use cuprate_helper::tx::tx_fee;
+use cuprate_helper;
 use cuprate_types::json::tx::Transaction;
 use hex::{FromHex, FromHexError};
 use actix_web::{error, get, http::StatusCode, web::{self}, App, HttpResponse, HttpServer, Responder};
@@ -132,7 +132,7 @@ async fn get_tx(
     let tx = ops::tx::get_tx_from_id(&tx_id, tables.tx_blobs())?;
 
     let response: TransactionResponse = match tx.clone().into() {
-        Transaction::V1 { prefix } => {
+        Transaction::V1 { prefix, signatures: _ } => {
             let inputs: Result<Vec<TransactionInput>, AppError>= prefix.vin.par_iter().map(|input| {
                 let mixins: Result<Vec<TransactionInputMixin>, AppError> = input
                     .key
@@ -153,7 +153,6 @@ async fn get_tx(
                                 amount_index: key_offset_sum
                             }
                         )?;
-
 
                         let mixin_tx_block = new_tables.block_infos().get(&(output.height as usize))?;
                         let mixin_tx_hash: [u8; 32] = if output.tx_idx == mixin_tx_block.mining_tx_index {
@@ -198,7 +197,11 @@ async fn get_tx(
                 })
             }
 
-            let fee = tx_fee(&tx);
+            let fee = if prefix.vin.len() > 0 {
+                cuprate_helper::tx::tx_fee(&tx)                
+            } else {
+                0
+            };
 
             TransactionResponse {
                 hash: tx_hash.clone(),
@@ -274,7 +277,11 @@ async fn get_tx(
                 })
             }
 
-            let fee = tx_fee(&tx);
+            let fee = if prefix.vin.len() > 0 {
+                cuprate_helper::tx::tx_fee(&tx)                
+            } else {
+                0
+            };
 
             TransactionResponse {
                 hash: tx_hash.clone(),
@@ -331,7 +338,22 @@ async fn get_block(
         .map_err(|_| AppError::BlockNotFoundError)?;
     let block_tx_hashes = tables.block_txs_hashes().get(&height)?; 
     
-    let mut transactions: Vec<BlockTransactionResponse> = Vec::with_capacity(block_tx_hashes.len());
+    let mut transactions: Vec<BlockTransactionResponse> = Vec::with_capacity(
+        block_tx_hashes.len() + 1
+    );
+
+    let coinbase_tx = ops::tx::get_tx_from_id(
+        &block_info.mining_tx_index,
+        tables.tx_blobs()
+    )?;
+
+    transactions.push(BlockTransactionResponse {
+        hash: hex::encode(coinbase_tx.hash()),
+        version: coinbase_tx.version(),
+        is_coinbase: true,
+        weight: coinbase_tx.weight(),
+        extra: hex::encode(coinbase_tx.prefix().extra.clone()),
+    });
     
     for tx_hash in block_tx_hashes.iter() {
         let tx = ops::tx::get_tx(&tx_hash, tables.tx_ids(), tables.tx_blobs())?;
@@ -340,7 +362,7 @@ async fn get_block(
         transactions.push(BlockTransactionResponse {
             hash: hex::encode(tx.hash()),
             version: tx.version(),
-            is_coinbase: true,
+            is_coinbase: false,
             weight: tx.weight(),
             extra: hex::encode(tx_prefix.extra.clone()),
         });
