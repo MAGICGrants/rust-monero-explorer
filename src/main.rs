@@ -132,7 +132,7 @@ async fn get_tx(
     let tx = ops::tx::get_tx_from_id(&tx_id, tables.tx_blobs())?;
 
     let response: TransactionResponse = match tx.clone().into() {
-        Transaction::V1 { prefix, signatures: _ } => {
+        Transaction::V1 { prefix } => {
             let inputs: Result<Vec<TransactionInput>, AppError>= prefix.vin.par_iter().map(|input| {
                 let mixins: Result<Vec<TransactionInputMixin>, AppError> = input
                     .key
